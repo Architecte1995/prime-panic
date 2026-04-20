@@ -1,0 +1,405 @@
+<!--
+Prime Panic
+An indie game from Architecte1995 and Kimi K 2.5 Thinking
+
+MIT License
+
+Copyright (c) 2026 Architecte1995 & Kimi K 2.5 Thinking (Moonshot AI)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+-->
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Prime Panic</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  
+  * { margin:0; padding:0; box-sizing:border-box; touch-action:none; }
+  body {
+    background: #050505;
+    overflow:hidden;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+  }
+  canvas { display:block; }
+  
+  .gameScore {
+    position:absolute; right:4vw;
+    font-size:7vw;
+    font-weight:bold;
+    pointer-events:none;
+    text-shadow:3px 3px 0 #000, 0 0 12px currentColor;
+    z-index:10;
+    letter-spacing:-2px;
+  }
+  #scoreBlue { top:42%; transform:translateY(-100%); color:#3b82f6; }
+  #scoreRed  { top:58%; color:#ef4444; }
+  .pop { animation:popAnim 0.25s; }
+  @keyframes popAnim {
+    0%{transform:scale(1);} 50%{transform:scale(1.5);} 100%{transform:scale(1);}
+  }
+
+  #overlay {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; flex-direction:column; justify-content:center; align-items:center;
+    background:rgba(0,0,0,0.92);
+    z-index:100;
+  }
+  #overlay.hidden { display:none; }
+  #overlay .line {
+    text-align:center;
+    margin:2vh 0;
+  }
+  .line1 { color:#fbbf24; font-size:7vw; text-shadow:3px 3px 0 #92400e, 0 0 20px rgba(251,191,36,0.4); }
+  .line2 { color:#22c55e; font-size:6vw; text-shadow:2px 2px 0 #000, 0 0 15px rgba(34,197,94,0.5); }
+  .line3 { color:#e5e7eb; font-size:5vw; animation:pulse 1s infinite; text-shadow:2px 2px 0 #000; }
+  @keyframes pulse { 0%,100%{opacity:0.4;} 50%{opacity:1;} }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="scoreBlue" class="gameScore">0</div>
+<div id="scoreRed" class="gameScore">0</div>
+
+<div id="overlay">
+  <div class="line line1">PRIME PANIC</div>
+  <div class="line line2" id="countdownText">19</div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const countdownText = document.getElementById('countdownText');
+const elBlue = document.getElementById('scoreBlue');
+const elRed = document.getElementById('scoreRed');
+
+function resize(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  blueBar.y = 25;
+  redBar.y = canvas.height - 25 - BAR_H;
+  blueBar.x = canvas.width/2 - BAR_W/2;
+  redBar.x = canvas.width/2 - BAR_W/2;
+}
+window.addEventListener('resize', resize);
+
+const BAR_W = Math.min(120, window.innerWidth * 0.18);
+const BAR_H = 12;
+const BALL_R = 10;
+const BASE_SPEED = 2.0;
+const WIN_SCORE = 19;
+const MAX_BOUNCE_ANGLE = Math.PI / 2.8;
+
+let blueScore = 0, redScore = 0;
+let state = 'countdown';
+let goalsCount = 0;
+let nextPrimeIndex = 0;
+let primes = [2,3,5,7,11,13,17,19,23,29,31];
+
+function isPrime(n){
+  if(n<2) return false;
+  for(let i=2;i*i<=n;i++) if(n%i===0) return false;
+  return true;
+}
+function nextPrime(){
+  if(nextPrimeIndex < primes.length) return primes[nextPrimeIndex++];
+  let n = primes[primes.length-1] + 2;
+  while(!isPrime(n)) n += 2;
+  primes.push(n);
+  return n;
+}
+
+function getBallColor(v){
+  const map = {1:'#e5e7eb',2:'#60a5fa',3:'#f87171',5:'#fbbf24',7:'#a78bfa',
+               11:'#34d399',13:'#fb923c',17:'#f472b6',19:'#22d3ee',23:'#e879f9'};
+  return map[v] || `hsl(${(v*137)%360}, 82%, 68%)`;
+}
+
+const blueBar = { x:0, y:25, w:BAR_W, h:BAR_H, color:'#3b82f6' };
+const redBar = { x:0, y:0, w:BAR_W, h:BAR_H, color:'#ef4444' };
+
+let balls = [];
+function addBall(value, isNew){
+  const r = BALL_R + value * 0.6;
+  balls.push({
+    x: canvas.width/2, y: canvas.height/2,
+    vx:0, vy:0, value:value, r:r,
+    color:getBallColor(value), active:!isNew,
+    speedMult: 0.88 + Math.random() * 0.24
+  });
+}
+addBall(1, false);
+
+// Contrôles tactiles
+const touches = {};
+canvas.addEventListener('touchstart', e=>{
+  e.preventDefault();
+  for(let t of e.changedTouches){
+    touches[t.identifier] = {x:t.clientX, y:t.clientY};
+    if(state==='waiting') resumeGame();
+  }
+}, {passive:false});
+canvas.addEventListener('touchmove', e=>{
+  e.preventDefault();
+  for(let t of e.changedTouches){
+    const touch = touches[t.identifier];
+    if(!touch) continue;
+    const x = t.clientX, y = t.clientY;
+    if(y < canvas.height/2) blueBar.x = x - blueBar.w/2;
+    else redBar.x = x - redBar.w/2;
+    touch.x = x; touch.y = y;
+  }
+}, {passive:false});
+canvas.addEventListener('touchend', e=>{
+  for(let t of e.changedTouches) delete touches[t.identifier];
+});
+
+// Souris PC
+let mouseSide = null;
+canvas.addEventListener('mousemove', e=>{
+  if(mouseSide==='top') blueBar.x = e.clientX - blueBar.w/2;
+  if(mouseSide==='bottom') redBar.x = e.clientX - redBar.w/2;
+});
+canvas.addEventListener('mousedown', e=>{
+  if(state==='waiting'){ resumeGame(); return; }
+  mouseSide = e.clientY < canvas.height/2 ? 'top' : 'bottom';
+});
+canvas.addEventListener('mouseup', ()=> mouseSide=null);
+
+function clampBar(bar){
+  if(bar.x < 0) bar.x = 0;
+  if(bar.x + bar.w > canvas.width) bar.x = canvas.width - bar.w;
+}
+
+// --- COMPTE À REBOURS ---
+function launchCountdown(){
+  goalsCount = 0;
+  setTimeout(()=>{
+    countdownText.textContent = '5';
+    countdownText.style.color = '#fbbf24';
+    setTimeout(()=>{
+      countdownText.textContent = 'GO';
+      countdownText.style.color = '#22c55e';
+      setTimeout(()=>{
+        startAutoPlay();
+      }, 600);
+    }, 800);
+  }, 900);
+}
+
+function startAutoPlay(){
+  state = 'playing';
+  overlay.classList.add('hidden');
+  // Balle 1 part en TURBO vers le rouge (bas)
+  balls.forEach(b=>{
+    if(b.value === 1){
+      b.active = true;
+      const angle = (Math.random() * Math.PI/3) - Math.PI/6;
+      const sp = BASE_SPEED * 2.4; // TURBO
+      b.vx = Math.sin(angle) * sp;
+      b.vy = Math.abs(Math.cos(angle) * sp);
+    }
+  });
+}
+
+function getSpeedMultiplier(totalBalls){
+  if(totalBalls === 1) return 2.40;
+  if(totalBalls === 2) return 1.80;
+  if(totalBalls === 3) return 1.50;
+  if(totalBalls === 4) return 1.20;
+  // À partir de 5, on descend de 0.05 par palier
+  let base = 1.20;
+  let extra = totalBalls - 4;
+  let mult = base - (extra * 0.05);
+  return Math.max(0.70, mult); // plancher à 0.70
+}
+
+function resumeGame(){
+  if(state==='gameover' || state==='countdown') return;
+  state = 'playing';
+  overlay.classList.add('hidden');
+  
+  const totalBalls = balls.length;
+  
+  balls.forEach(b=>{
+    if(!b.active || (b.vx===0 && b.vy===0)){
+      b.active = true;
+      const angle = (Math.random()*Math.PI/2)-Math.PI/4;
+      const dirX = Math.random()>0.5?1:-1;
+      const dirY = Math.random()>0.5?1:-1;
+      const sp = BASE_SPEED * getSpeedMultiplier(totalBalls) * b.speedMult;
+      b.vx = Math.cos(angle)*sp*dirX;
+      b.vy = Math.sin(angle)*sp + (0.4*dirY);
+    } else {
+      // Balles déjà en jeu : rescale vitesse
+      const curSp = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
+      const targetSp = BASE_SPEED * getSpeedMultiplier(totalBalls) * b.speedMult;
+      if(curSp > 0.01){
+        b.vx = (b.vx/curSp) * targetSp;
+        b.vy = (b.vy/curSp) * targetSp;
+      }
+    }
+  });
+}
+
+// TAP sur l'overlay pour continuer (après but uniquement)
+function onOverlayTap(e){
+  e.preventDefault();
+  e.stopPropagation();
+  if(state==='waiting') resumeGame();
+}
+overlay.addEventListener('touchstart', onOverlayTap, {passive:false});
+overlay.addEventListener('click', onOverlayTap);
+
+function showPauseOverlay(){
+  state = 'waiting';
+  overlay.innerHTML = `
+    <div class="line line1">PRIME PANIC</div>
+    <div class="line line2">GOAL TO 19</div>
+    <div class="line line3">TAP TO CONTINUE</div>
+  `;
+  overlay.classList.remove('hidden');
+}
+
+function pongBounce(ball, bar, goingDown){
+  let rel = (ball.x - (bar.x + bar.w/2)) / (bar.w/2);
+  rel = Math.max(-1, Math.min(1, rel));
+  let bounceAngle = rel * MAX_BOUNCE_ANGLE;
+  let speed = Math.sqrt(ball.vx*ball.vx + ball.vy*ball.vy) * 1.015;
+  ball.vx = speed * Math.sin(bounceAngle);
+  if(goingDown){
+    ball.vy = Math.abs(speed * Math.cos(bounceAngle));
+    ball.y = bar.y + bar.h + ball.r;
+  } else {
+    ball.vy = -Math.abs(speed * Math.cos(bounceAngle));
+    ball.y = bar.y - ball.r;
+  }
+}
+
+function update(){
+  if(state !== 'playing') return;
+  clampBar(blueBar); clampBar(redBar);
+  blueBar.y = 25;
+  redBar.y = canvas.height - 25 - BAR_H;
+
+  balls.forEach(b=>{
+    if(!b.active) return;
+    b.x += b.vx; b.y += b.vy;
+
+    if(b.x - b.r < 0){ b.x = b.r; b.vx = Math.abs(b.vx); }
+    if(b.x + b.r > canvas.width){ b.x = canvas.width - b.r; b.vx = -Math.abs(b.vx); }
+
+    if(b.vy < 0 && b.y - b.r <= blueBar.y + blueBar.h && b.y >= blueBar.y &&
+       b.x + b.r >= blueBar.x && b.x - b.r <= blueBar.x + blueBar.w){
+      pongBounce(b, blueBar, true);
+    }
+    if(b.vy > 0 && b.y + b.r >= redBar.y && b.y <= redBar.y + redBar.h &&
+       b.x + b.r >= redBar.x && b.x - b.r <= redBar.x + redBar.w){
+      pongBounce(b, redBar, false);
+    }
+
+    if(b.y + b.r < 0){
+      redScore += b.value;
+      goalsCount++;
+      scoreEffect(elRed);
+      if(checkWin()) return;
+      resetBall(b); showPauseOverlay();
+    }
+    else if(b.y - b.r > canvas.height){
+      blueScore += b.value;
+      goalsCount++;
+      scoreEffect(elBlue);
+      if(checkWin()) return;
+      resetBall(b); showPauseOverlay();
+    }
+  });
+}
+
+function resetBall(ball){
+  ball.x = canvas.width/2; ball.y = canvas.height/2;
+  ball.vx = 0; ball.vy = 0; ball.active = false;
+  addBall(nextPrime(), true);
+}
+
+function scoreEffect(el){
+  el.textContent = el.id==='scoreBlue' ? blueScore : redScore;
+  el.classList.remove('pop');
+  void el.offsetWidth;
+  el.classList.add('pop');
+}
+
+function checkWin(){
+  if(blueScore >= WIN_SCORE){ endGame('BLUE WINS !','#3b82f6'); return true; }
+  if(redScore >= WIN_SCORE){ endGame('RED WINS !','#ef4444'); return true; }
+  return false;
+}
+
+function endGame(msg, color){
+  state = 'gameover';
+  overlay.innerHTML = `
+    <div class="line line1">PRIME PANIC</div>
+    <div class="line line2" style="color:${color};text-shadow:2px 2px 0 #000,0 0 20px ${color}">${msg}</div>
+    <div class="line line3">RELOAD THE PAGE</div>
+  `;
+  overlay.classList.remove('hidden');
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([10,14]);
+  ctx.beginPath(); ctx.moveTo(0,canvas.height/2); ctx.lineTo(canvas.width,canvas.height/2); ctx.stroke();
+  ctx.setLineDash([]);
+
+  [blueBar, redBar].forEach(b=>{
+    ctx.fillStyle = b.color;
+    ctx.shadowColor = b.color; ctx.shadowBlur = 16;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.shadowBlur = 0;
+  });
+
+  balls.forEach(b=>{
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+    ctx.fillStyle = b.color;
+    ctx.shadowColor = b.color; ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.closePath();
+
+    ctx.fillStyle = '#000';
+    ctx.font = `bold ${Math.max(8, b.r*0.65)}px "Press Start 2P", monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(b.value, b.x, b.y);
+  });
+}
+
+function loop(){ update(); draw(); requestAnimationFrame(loop); }
+resize();
+loop();
+launchCountdown();
+</script>
+</body>
+</html>
