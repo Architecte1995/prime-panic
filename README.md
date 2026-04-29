@@ -1,58 +1,45 @@
-# Prime Panic
+# Prime Panic v3
 
-A two-player arcade paddle game where the balls are prime numbers.
+Prime-number Pong variant for two players (or solo multitouch).
 
----
+## Gameplay
 
-## 🎮 Concept
+- Two bars (blue top, red bottom) deflect a growing set of balls
+- Each ball carries a prime number as its value
+- Missing a ball awards its prime value to the opponent
+- First to reach 19 wins
+- Speed scales down as more balls enter play
+- Balls spawn in prime order: 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31…
 
-Prime Panic is a revisited Pong-style game: two players face off on a single screen (phone or tablet laid flat). Every time a goal is scored, a new ball appears — and its value is a prime number. The further the match goes, the more chaos unfolds.
+## Controls
 
-**Objective:** be the first to reach **19 points**.
+- Touch: drag anywhere on your half of the screen
+- Mouse: click and drag on your half
+- Tap overlay to continue after each goal
 
----
+## Tech Stack
 
-## 📱 How to Play
+- Pure HTML5 Canvas 2D / CSS3 / Vanilla JavaScript
+- No game engines, no physics libraries
 
-1. Open `index.html` in a mobile browser
-2. Lay the phone flat on a table
-3. Blue player (top): touch the **upper half** of the screen
-4. Red player (bottom): touch the **lower half** of the screen
-5. The first round starts with a countdown: `19 → 5 → GO`
-6. **TAP TO CONTINUE** after each goal
+## Third-party assets
 
----
+- **Font**: [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P) by CodeMan38 — licensed under [SIL Open Font License 1.1](https://scripts.sil.org/OFL)
+- **Concept**: inspired by *Pong* (Atari, 1972), a public-domain game concept. All code, physics, and prime-number mechanics are original.
 
-## ⚙️ Rules
+## Authors
 
-| Element | Detail |
-|---------|--------|
-| Starting ball | **1** (kickoff) |
-| New balls | Prime numbers: **2, 3, 5, 7, 11, 13, 17, 19...** |
-| Target score | **19** |
-| Speed | Scales with the number of active balls |
-| Game over | `RELOAD THE PAGE` to play again |
+- **Architecte1995** — concept, prime-number mechanics, game design
+- **Kimi K 2.6 Thinking** (Moonshot AI) — code generation & refactoring
 
----
+## Integrity
 
-## 🛠️ Tech Stack
+| Property | Value |
+|----------|-------|
+| Version | v3 |
+| SHA-256 | `82aa16d53983de1b4963fcbd01496c5c58484f2530b147367b1ddc24da5c7723` |
+| File size | 12363 bytes |
 
-- HTML5 Canvas
-- Vanilla JavaScript
-- Pixel font: [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P)
-- Zero external dependencies
+## License
 
----
-
-## 👥 Authors
-
-- **Architecte1995** — Concept, lore & gameplay
-- **Kimi K 2.5 Thinking** (Moonshot AI) — Code & architecture
-
----
-
-## 📜 License
-
-MIT License — see the `LICENSE` file or the source code header.
-
-Copyright (c) 2026 Architecte1995 & Kimi K 2.5 Thinking (Moonshot AI)
+MIT License — Copyright (c) 2026 Architecte1995 & Kimi K 2.6 Thinking (Moonshot AI)
